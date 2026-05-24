@@ -1,0 +1,213 @@
+/* ============================================================
+   Doki Doki — Colors & Type
+   A kawaii sticker-shop visual system. Bubble letters, fat
+   outlines, glossy candy color, white die-cut "sticker" borders.
+   ============================================================ */
+
+/* ---------- Webfonts (Google Fonts) ---------- */
+/* Lilita One  — bubble display, used in logo                    */
+/* Fredoka     — rounded geometric for subheads / UI             */
+/* DM Sans     — neutral body                                    */
+/* DM Mono     — receipts, price tags, captions                  */
+@import url("https://fonts.googleapis.com/css2?family=Lilita+One&family=Fredoka:wght@400;500;600;700&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=DM+Mono:wght@400;500&display=swap");
+
+:root {
+  /* ------------------ Brand colors ------------------ */
+  --dd-bubblegum: #FF3D8B;
+  --dd-bubblegum-deep: #E81C6E;
+  --dd-bubblegum-soft: #FFD4E4;
+
+  /* Pop palette */
+  --dd-cherry:    #FF3B30;
+  --dd-yuzu:      #FFD53E;
+  --dd-matcha:    #5BC47A;
+  --dd-soda:      #4DB6FF;
+  --dd-grape:     #8C6BFF;
+  --dd-tangerine: #FF8A2C;
+
+  /* Tints */
+  --dd-bubblegum-tint: #FFE7F0;
+  --dd-cherry-tint:    #FFE1DE;
+  --dd-yuzu-tint:      #FFF3B8;
+  --dd-matcha-tint:    #D6F3DF;
+  --dd-soda-tint:      #D6ECFF;
+  --dd-grape-tint:     #E5DDFF;
+
+  /* Neutrals */
+  --dd-cream:   #FFF8EE;
+  --dd-paper:   #FFFFFF;
+  --dd-milk:    #FBF1E0;
+  --dd-ash:     #EDE5D6;
+  --dd-mute:    #8A8378;
+  --dd-graphite:#2A2520;
+  --dd-ink:     #14110D;
+
+  /* Semantic */
+  --dd-success: var(--dd-matcha);
+  --dd-warning: var(--dd-yuzu);
+  --dd-danger:  var(--dd-cherry);
+  --dd-info:    var(--dd-soda);
+
+  /* Foreground / background */
+  --fg-1: var(--dd-ink);
+  --fg-2: var(--dd-graphite);
+  --fg-3: var(--dd-mute);
+  --fg-on-bubblegum: #FFFFFF;
+  --fg-on-cream:     var(--dd-ink);
+
+  --bg-1: var(--dd-cream);
+  --bg-2: var(--dd-paper);
+  --bg-3: var(--dd-milk);
+
+  /* ------------------ Type stack ------------------ */
+  --font-display: "Lilita One", "Fredoka", system-ui, sans-serif;
+  --font-rounded: "Fredoka", "DM Sans", system-ui, sans-serif;
+  --font-body:    "DM Sans", system-ui, -apple-system, sans-serif;
+  --font-mono:    "DM Mono", ui-monospace, "JetBrains Mono", monospace;
+
+  /* ------------------ Type scale ------------------ */
+  --t-display: clamp(56px, 9vw, 128px);
+  --t-h1: 56px;
+  --t-h2: 40px;
+  --t-h3: 28px;
+  --t-h4: 22px;
+  --t-body: 16px;
+  --t-small: 14px;
+  --t-micro: 12px;
+
+  --lh-tight: 0.95;
+  --lh-snug:  1.1;
+  --lh-body:  1.45;
+  --lh-loose: 1.6;
+
+  /* ------------------ Geometry ------------------ */
+  --r-xs: 8px;
+  --r-sm: 12px;
+  --r-md: 18px;
+  --r-lg: 28px;
+  --r-xl: 40px;
+  --r-pill: 999px;
+  --r-blob: 42% 58% 60% 40% / 50% 45% 55% 50%;
+
+  /* Outline weight */
+  --outline-1: 2px;
+  --outline-2: 3px;
+  --outline-3: 4px;
+  --outline-fat: 6px;
+
+  --die-cut: 6px;
+
+  /* ------------------ Shadow system ------------------ */
+  --shadow-stamp-sm: 3px 3px 0 var(--dd-ink);
+  --shadow-stamp-md: 5px 5px 0 var(--dd-ink);
+  --shadow-stamp-lg: 8px 8px 0 var(--dd-ink);
+  --shadow-soft: 0 12px 30px -10px rgba(20,17,13,0.25);
+  --shadow-lift: 0 20px 60px -15px rgba(232,28,110,0.35);
+  --gloss-inner: inset 0 6px 0 rgba(255,255,255,0.5);
+
+  /* ------------------ Spacing ------------------ */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+  --s-7: 48px;
+  --s-8: 64px;
+  --s-9: 96px;
+
+  /* ------------------ Motion ------------------ */
+  --ease-pop:   cubic-bezier(.34,1.56,.64,1);
+  --ease-out:   cubic-bezier(.22,.61,.36,1);
+  --ease-in:    cubic-bezier(.55,.06,.68,.19);
+  --dur-fast:   140ms;
+  --dur-base:   240ms;
+  --dur-slow:   440ms;
+  --dur-wiggle: 700ms;
+}
+
+/* ---------- Semantic element defaults ---------- */
+html, body {
+  background: var(--bg-1);
+  color: var(--fg-2);
+  font-family: var(--font-body);
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, .h1 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: var(--t-h1);
+  line-height: var(--lh-tight);
+  color: var(--fg-1);
+  letter-spacing: -0.01em;
+}
+h2, .h2 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: var(--t-h2);
+  line-height: var(--lh-snug);
+  color: var(--fg-1);
+}
+h3, .h3 {
+  font-family: var(--font-rounded);
+  font-weight: 700;
+  font-size: var(--t-h3);
+  line-height: var(--lh-snug);
+  color: var(--fg-1);
+}
+h4, .h4 {
+  font-family: var(--font-rounded);
+  font-weight: 600;
+  font-size: var(--t-h4);
+  line-height: var(--lh-snug);
+  color: var(--fg-1);
+}
+p, .p {
+  font-family: var(--font-body);
+  font-size: var(--t-body);
+  color: var(--fg-2);
+}
+small, .small { font-size: var(--t-small); color: var(--fg-3); }
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--t-micro);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--fg-2);
+}
+.display {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: var(--t-display);
+  line-height: var(--lh-tight);
+  color: var(--fg-1);
+}
+code, .mono {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+
+/* ---------- Reusable bits ---------- */
+.dd-outline {
+  border: var(--outline-3) solid var(--dd-ink);
+}
+.dd-card {
+  background: var(--bg-2);
+  border: var(--outline-3) solid var(--dd-ink);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-stamp-md);
+}
+.dd-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 8px 16px;
+  border-radius: var(--r-pill);
+  border: var(--outline-2) solid var(--dd-ink);
+  background: var(--dd-paper);
+  font-family: var(--font-rounded);
+  font-weight: 600;
+}
