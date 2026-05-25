@@ -35,6 +35,7 @@ const DEFAULT_SETTINGS = {
   minFirstMeld:        0,
   twoDecks3plus:       true,
   handSize:            7,      // 7 cards dealt to each player
+  difficulty:          'normal', // 'normal' | 'hard'
 };
 
 // ---------- Card helpers ----------
@@ -265,7 +266,7 @@ function drawFromStock(game) {
   const card = game.stock.pop();
   game.players[game.currentPlayer].hand.push(card);
   game.phase    = 'play';
-  game.lastDrawn = { source: 'stock', cards: [card] };
+  game.lastDrawn = { source: 'stock', cards: [card], targetCard: card };
   pushLog(game, `${game.players[game.currentPlayer].name} drew from the deck.`);
   return { taken: [card] };
 }

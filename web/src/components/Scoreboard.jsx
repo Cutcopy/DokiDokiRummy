@@ -12,7 +12,11 @@ function Scoreboard({ game, onNextRound, onNewGame }) {
       <div className="dd-modal" style={{ maxWidth: 640 }}>
         {isGameOver ? (
           <React.Fragment>
-            <div className="dd-win-trophy">{winner?.isHuman ? '🏆' : '★'}</div>
+            <div className="dd-win-trophy">
+              {winner?.isHuman
+                ? <img src="assets/trophy.svg" alt="Trophy" className="dd-trophy-img" />
+                : '★'}
+            </div>
             <h1>{winner?.isHuman ? 'You Win!' : `${winner?.name} Wins!`}</h1>
             <p className="lede">
               {winner?.score} points — first to {game.settings?.winScore ?? 500} ♥

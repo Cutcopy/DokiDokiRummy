@@ -965,6 +965,13 @@ body {
   margin-bottom: 16px;
 }
 
+.dd-trophy-img {
+  width: 120px;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+}
+
 /* ─── Settings Modal ────────────────────────────────────── */
 
 .dd-settings-section {
@@ -1032,6 +1039,33 @@ body {
 
 .dd-toggle-btn:hover:not(.is-active) {
   background: var(--dd-yuzu-tint);
+}
+
+/* ============================================================
+   Drawn-card reveal overlay
+   ============================================================ */
+
+@keyframes card-reveal {
+  /* pop in */
+  0%   { transform: translate(-50%, -50%) scale(0.3) rotate(-6deg); opacity: 0; }
+  14%  { transform: translate(-50%, -50%) scale(1.22) rotate(3deg); opacity: 1; }
+  22%  { transform: translate(-50%, -50%) scale(1.08) rotate(1deg); opacity: 1; }
+  /* hold readable */
+  55%  { transform: translate(-50%, -50%) scale(1.08) rotate(1deg); opacity: 1; }
+  /* fly toward hand */
+  100% { transform: translate(-50%, 120%) scale(0.6) rotate(0deg); opacity: 0; }
+}
+
+.dd-draw-reveal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  --card-w: 116px;
+  --card-h: 162px;
+  z-index: 600;
+  pointer-events: none;
+  animation: card-reveal 1050ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  filter: drop-shadow(0 16px 40px rgba(0,0,0,0.5));
 }
 
 /* ============================================================

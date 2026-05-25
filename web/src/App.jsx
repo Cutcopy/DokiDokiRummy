@@ -16,6 +16,8 @@ function App() {
   const [undoSnapshot, setUndoSnapshot]   = useState(null);  // saved before drawFromDiscard
   const [sortMode, setSortMode]           = useState('suit'); // 'suit' | 'rank' | 'value'
   const [rummyCard, setRummyCard]         = useState(null);  // card human can call Rummy on
+  const [drawnCardDisplay, setDrawnCardDisplay] = useState(null); // card reveal overlay
+  const drawnCardTimerRef = useRef(null);
   const rummyResolveRef     = useRef(null); // resolves the Rummy-decision promise in runAITurn
   const rummyPlayResolveRef = useRef(null); // resolves when human finishes their Rummy play
   const mascotsRef = useRef([null]);      // index 0 = human (no mascot)
@@ -71,6 +73,18 @@ function App() {
   };
 
   // ---------- Human actions ----------
+
+  // Show the drawn card prominently in the centre of the table for ~1 s.
+  const flashDrawnCard = (card) => {
+    if (!card) return;
+    if (drawnCardTimerRef.current) clearTimeout(drawnCardTimerRef.current);
+    setDrawnCardDisplay(card);
+    drawnCardTimerRef.current = setTimeout(() => {
+      setDrawnCardDisplay(null);
+      drawnCardTimerRef.current = null;
+    }, 1050);
+  };
+
   const onStockClick = () => {
     if (!game || game.currentPlayer !== 0 || game.phase !== 'draw') return;
     setRummyCard(null);    // dismiss any Rummy alert
@@ -78,6 +92,7 @@ function App() {
     const result = window.RummyGame.drawFromStock(game);
     if (result.error) return showToast(result.error, 'error');
     if (result.roundOver) { finishRound(); return; }
+    flashDrawnCard(game.lastDrawn?.targetCard);
     refresh();
   };
 
@@ -93,11 +108,15 @@ function App() {
     const result = window.RummyGame.drawFromDiscard(game, idx);
     if (result.error) return showToast(result.error, 'error');
     setUndoSnapshot(snapshot);
+    flashDrawnCard(game.lastDrawn?.targetCard);
     refresh();
   };
 
   const onUndoDraw = () => {
     if (!undoSnapshot || !game) return;
+    // Clear any in-flight draw reveal
+    if (drawnCardTimerRef.current) { clearTimeout(drawnCardTimerRef.current); drawnCardTimerRef.current = null; }
+    setDrawnCardDisplay(null);
     // Restore player's hand and discard pile to pre-draw state
     game.players[0].hand = undoSnapshot.hand;
     game.discard         = undoSnapshot.discard;
@@ -172,6 +191,30 @@ function App() {
       return;
     }
     refresh();
+  };
+
+  // Cancel a Rummy call — put the card back and resume normal flow
+  const onCancelRummy = () => {
+    if (!game) return;
+    const card = game.lastDrawn?.targetCard;
+    if (!card || game.lastDrawn?.source !== 'rummy') return;
+    // Return the card to the top of the discard pile
+    game.players[0].hand = game.players[0].hand.filter(c => c.id !== card.id);
+    game.discard.push(card);
+    game.lastDrawn = null;
+    setSelected([]);
+    if (rummyPlayResolveRef.current) {
+      // 3+ player: runAITurn is waiting — resolving it will restore the correct
+      // next player and call refresh() for us.
+      const resolve = rummyPlayResolveRef.current;
+      rummyPlayResolveRef.current = null;
+      resolve('cancelled');
+    } else {
+      // 2-player: it was the human's own draw turn anyway; reset to draw phase.
+      game.currentPlayer = 0;
+      game.phase = 'draw';
+      refresh();
+    }
   };
 
   // ---------- Round management ----------
@@ -605,10 +648,18 @@ function App() {
               onDiscardSelected={onDiscardSelected}
               onClearSelection={() => setSelected([])}
               onUndoDraw={onUndoDraw}
+              onCancelRummy={onCancelRummy}
             />
           </div>
         </div>
       </ScalingStage>
+
+      {/* DRAWN CARD REVEAL — outside ScalingStage so CSS transform doesn't clip it */}
+      {drawnCardDisplay && (
+        <div className="dd-draw-reveal" key={drawnCardDisplay.id}>
+          <Card card={drawnCardDisplay} />
+        </div>
+      )}
 
       {/* Toast */}
       {toast && (
@@ -664,7 +715,7 @@ function ActionPanel({
   game, human, isHumanTurn, isPlayPhase, selected,
   selectionIsValidMeld, layoffTargets, canDiscard,
   mustMeldFirst, mustMeldCard, isRummyPlay,
-  undoSnapshot, onUndoDraw,
+  undoSnapshot, onUndoDraw, onCancelRummy,
   onMeldSelected, onDiscardSelected, onClearSelection,
 }) {
   if (!isHumanTurn) {
@@ -697,9 +748,19 @@ function ActionPanel({
         {mustMeldFirst && mustMeldCard && (
           <div className="dd-actions-hint" style={{ color: 'var(--dd-cherry)', fontWeight: 600 }}>
             {isRummyPlay
-              ? `You called RUMMY! Meld or lay off the ${mustMeldCard.rank}${mustMeldCard.suit} ♥`
+              ? `RUMMY! Build a meld or lay off using ${mustMeldCard.rank}${mustMeldCard.suit} — wilds count!`
               : `Must meld or lay off the ${mustMeldCard.rank}${mustMeldCard.suit} before discarding ♥`}
           </div>
+        )}
+        {isRummyPlay && (
+          <button
+            className="dd-btn dd-btn--ghost dd-btn--small"
+            onClick={onCancelRummy}
+            title="Return the card to the discard pile and take your normal turn"
+            style={{ alignSelf: 'flex-start', marginTop: -4 }}
+          >
+            ↩ Put back
+          </button>
         )}
 
         {selCount === 0 && !mustMeldFirst && (
