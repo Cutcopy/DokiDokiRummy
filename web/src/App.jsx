@@ -14,6 +14,7 @@ function App() {
   const [aiTurnRunning, setAiTurnRunning] = useState(false);
   const [showScoreboard, setShowScoreboard] = useState(false);
   const [undoSnapshot, setUndoSnapshot]   = useState(null);  // saved before drawFromDiscard
+  const [sortMode, setSortMode]           = useState('suit'); // 'suit' | 'rank' | 'value'
   const mascotsRef = useRef([null]);      // index 0 = human (no mascot)
 
   // Spread the current mutated game object into React state to trigger a re-render.
@@ -308,7 +309,12 @@ function App() {
   const isPlayPhase   = game?.phase === 'play';
   const acesHigh      = game?.settings?.acesHigh   ?? false;
   const deuceWild     = game?.settings?.deuceWild  ?? false;
-  const sortedHand    = human ? window.RummyGame.sortHand(human.hand) : [];
+  const sortedHand    = human ? sortHandBy(human.hand, sortMode) : [];
+
+  const SORT_MODES = ['suit', 'rank', 'value'];
+  const SORT_LABELS = { suit: '♠ Suit', rank: 'A Rank', value: '★ Value' };
+  const cycleSortMode = () =>
+    setSortMode(m => SORT_MODES[(SORT_MODES.indexOf(m) + 1) % SORT_MODES.length]);
 
   // Which melds can the selected single card lay off on?
   let layoffTargets = [];
@@ -447,6 +453,13 @@ function App() {
           {/* PLAYER AREA */}
           <div className="dd-player-area">
             <div className="dd-hand-wrap">
+              <button
+                className="dd-sort-btn"
+                onClick={cycleSortMode}
+                title="Cycle sort order"
+              >
+                ⇅ {SORT_LABELS[sortMode]}
+              </button>
               <div className="dd-hand" data-hand-of="human">
                 {sortedHand.map((c, idx) => {
                   const isSel = selected.includes(c.id);
@@ -655,6 +668,34 @@ function HeartGlyph() {
       <ellipse cx="36" cy="38" rx="5" ry="8" fill="#FFF" opacity="0.6" />
     </svg>
   );
+}
+
+// ---------- Hand sort helper ----------
+const SUIT_ORDER = ['♠', '♥', '♣', '♦'];
+const RANK_ORDER = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+
+function sortHandBy(hand, mode) {
+  return [...hand].sort((a, b) => {
+    // Jokers always at the end
+    if (a.isJoker && b.isJoker) return 0;
+    if (a.isJoker) return 1;
+    if (b.isJoker) return -1;
+
+    if (mode === 'rank') {
+      const rd = RANK_ORDER.indexOf(a.rank) - RANK_ORDER.indexOf(b.rank);
+      if (rd !== 0) return rd;
+      return SUIT_ORDER.indexOf(a.suit) - SUIT_ORDER.indexOf(b.suit);
+    }
+    if (mode === 'value') {
+      const vd = window.RummyGame.cardValue(b) - window.RummyGame.cardValue(a); // high → low
+      if (vd !== 0) return vd;
+      return SUIT_ORDER.indexOf(a.suit) - SUIT_ORDER.indexOf(b.suit);
+    }
+    // default: 'suit'
+    const sd = SUIT_ORDER.indexOf(a.suit) - SUIT_ORDER.indexOf(b.suit);
+    if (sd !== 0) return sd;
+    return RANK_ORDER.indexOf(a.rank) - RANK_ORDER.indexOf(b.rank);
+  });
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);
