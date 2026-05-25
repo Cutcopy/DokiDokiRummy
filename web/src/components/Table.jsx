@@ -74,7 +74,6 @@ function Table({
             )}
             <div className="dd-deck-count">{game.stock.length}</div>
           </div>
-          <div className="dd-pile-label">Deck</div>
         </div>
 
         {/* Turn banner */}
@@ -109,7 +108,6 @@ function Table({
               })
             )}
           </div>
-          <div className="dd-pile-label">Discard</div>
         </div>
 
         <div /> {/* spacer */}

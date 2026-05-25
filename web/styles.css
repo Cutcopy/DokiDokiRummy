@@ -504,6 +504,7 @@ body {
    ============================================================ */
 .dd-opp {
   position: relative;
+  z-index: 2; /* keeps speech bubble above the sibling melds row */
   background: var(--dd-paper);
   border: var(--outline-3) solid var(--dd-ink);
   border-radius: var(--r-lg);
@@ -700,6 +701,30 @@ body {
   position: relative;
   height: 160px;
   overflow: visible;
+}
+.dd-sort-btn {
+  position: absolute;
+  top: -4px;
+  right: 0;
+  font-family: var(--font-rounded);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--dd-graphite);
+  background: var(--dd-cream);
+  border: var(--outline-2) solid var(--dd-ink);
+  border-radius: var(--r-pill);
+  padding: 3px 10px;
+  cursor: pointer;
+  box-shadow: var(--shadow-stamp-sm);
+  transition: transform 120ms var(--ease-pop), background 120ms;
+  z-index: 10;
+}
+.dd-sort-btn:hover {
+  background: var(--dd-paper);
+  transform: translateY(-1px);
+}
+.dd-sort-btn:active {
+  transform: translateY(1px);
 }
 .dd-hand {
   position: absolute;
