@@ -206,7 +206,7 @@ body {
   background-size: 32px 32px, 16px 16px;
   background-position: 0 0, 8px 8px;
   display: grid;
-  grid-template-rows: 220px 1fr 150px;
+  grid-template-rows: minmax(220px, auto) 1fr 150px;
   border-top: var(--outline-3) solid var(--dd-ink);
   border-bottom: var(--outline-3) solid var(--dd-ink);
 }
@@ -236,10 +236,11 @@ body {
 }
 .dd-zone--opponents {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-around;
   gap: 24px;
   padding-top: 20px;
+  padding-bottom: 16px;
 }
 .dd-zone--center {
   display: grid;
@@ -657,6 +658,28 @@ body {
   flex-wrap: wrap;
   justify-content: center;
   max-width: 360px;
+}
+
+/* ---- Heads-up layout: panel on left, melds spread right ---- */
+.dd-zone--opponents:has(.dd-opp-stack:only-child) {
+  justify-content: flex-start;
+}
+.dd-zone--opponents:has(.dd-opp-stack:only-child) .dd-opp-stack {
+  flex-direction: row;
+  align-items: flex-start;
+  width: 100%;
+  max-width: none;
+}
+.dd-zone--opponents:has(.dd-opp-stack:only-child) .dd-opp {
+  flex-shrink: 0;
+}
+.dd-zone--opponents:has(.dd-opp-stack:only-child) .dd-opp-melds-row {
+  flex: 1;
+  max-width: none;
+  justify-content: flex-start;
+  align-items: flex-start;
+  align-content: flex-start;
+  padding-top: 6px;
 }
 .dd-opp-meld {
   display: flex;
