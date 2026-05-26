@@ -198,9 +198,17 @@ function App() {
     if (!game) return;
     const card = game.lastDrawn?.targetCard;
     if (!card || game.lastDrawn?.source !== 'rummy') return;
+    // Safety guard: only cancel if the rummy card is still in the player's hand.
+    // If the card was already played (e.g. laid off on a meld), bail out rather
+    // than pushing a card to the discard that's simultaneously living in a meld —
+    // that would give the card two data-card-id DOM nodes and cause a ghost FLIP
+    // animation to fire every single render.
+    if (!game.players[0].hand.some(c => c.id === card.id)) return;
     // Return the card to the top of the discard pile
     game.players[0].hand = game.players[0].hand.filter(c => c.id !== card.id);
     game.discard.push(card);
+    // Clear stale FLIP position so the returned card doesn't animate from the wrong spot
+    delete prevPositions.current[card.id];
     game.lastDrawn = null;
     setSelected([]);
     if (rummyPlayResolveRef.current) {
@@ -752,7 +760,7 @@ function ActionPanel({
               : `Must meld or lay off the ${mustMeldCard.rank}${mustMeldCard.suit} before discarding ♥`}
           </div>
         )}
-        {isRummyPlay && (
+        {isRummyPlay && mustMeldFirst && (
           <button
             className="dd-btn dd-btn--ghost dd-btn--small"
             onClick={onCancelRummy}
