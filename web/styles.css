@@ -597,11 +597,13 @@ body {
   color: var(--dd-ink);
   box-shadow: var(--shadow-stamp-sm);
   z-index: 6;
-  transform: rotate(-2deg);
   max-width: 280px;
   white-space: normal;
   line-height: 1.25;
-  animation: dd-bubble-in 200ms var(--ease-pop) both;
+  /* enter: jiggle-settle, then gentle float while visible */
+  animation:
+    dd-bubble-in    340ms var(--ease-pop) both,
+    dd-bubble-float 3.2s  ease-in-out    420ms infinite;
 }
 .dd-bubble::before {
   content: '';
@@ -615,9 +617,30 @@ body {
   border-left: var(--outline-3) solid var(--dd-ink);
   transform: rotate(45deg);
 }
+
+/* Enter: pop up from below with overshoot wobble */
 @keyframes dd-bubble-in {
-  0% { opacity: 0; transform: rotate(3deg) scale(0.5); }
-  100% { opacity: 1; transform: rotate(-2deg) scale(1); }
+  0%   { opacity: 0; transform: rotate(6deg)  scale(0.55) translateY(8px); }
+  55%  { opacity: 1; transform: rotate(-3deg) scale(1.06) translateY(-3px); }
+  78%  { transform: rotate(-1.5deg) scale(0.97) translateY(1px); }
+  100% { opacity: 1; transform: rotate(-2deg) scale(1)    translateY(0); }
+}
+
+/* Idle: gentle bob so the bubble feels alive */
+@keyframes dd-bubble-float {
+  0%,  100% { transform: rotate(-2deg)   translateY(0px); }
+  40%        { transform: rotate(-2.5deg) translateY(-3px); }
+  70%        { transform: rotate(-1.8deg) translateY(-1px); }
+}
+
+/* Exit: shrink-and-fade triggered by the .is-leaving class */
+@keyframes dd-bubble-out {
+  0%   { opacity: 1; transform: rotate(-2deg) scale(1)    translateY(0); }
+  100% { opacity: 0; transform: rotate(1deg)  scale(0.82) translateY(5px); }
+}
+.dd-bubble.is-leaving {
+  /* override both enter + float, play exit instead */
+  animation: dd-bubble-out 320ms ease-in both;
 }
 
 /* Opponent's laid-down melds */
