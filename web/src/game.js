@@ -36,6 +36,8 @@ const DEFAULT_SETTINGS = {
   twoDecks3plus:       true,
   handSize:            7,      // 7 cards dealt to each player
   difficulty:          'normal', // 'normal' | 'hard'
+  floating:            true,   // must discard to go out; can't win via meld/layoff alone
+                               // also prevents winning on a rummy call
 };
 
 // ---------- Card helpers ----------
@@ -301,6 +303,11 @@ function playMeld(game, cardIds) {
     }
   }
 
+  // Floating rule: must always keep at least one card to discard; can't go out by melding
+  if (settings.floating && player.hand.length === cardIds.length) {
+    return { error: 'Must keep a card to discard — you can\'t go out by melding alone (floating rule)' };
+  }
+
   const wasFirstMeld = player.melds.length === 0;
   let arranged = cards;
   if (isValidRun(cards, settings.acesHigh, settings.deuceWild)) arranged = arrangeRun(cards, settings.acesHigh, settings.deuceWild);
@@ -332,6 +339,10 @@ function playLayOff(game, cardId, targetPlayerIdx, meldIdx) {
   if (!meld) return { error: 'Meld not found' };
   const newMeld = tryLayOff(card, meld, settings.acesHigh, settings.deuceWild);
   if (!newMeld) return { error: 'Card does not extend meld' };
+  // Floating rule: must always keep at least one card to discard; can't go out by laying off
+  if (settings.floating && player.hand.length === 1) {
+    return { error: 'Must keep a card to discard — you can\'t go out by laying off (floating rule)' };
+  }
   target.melds[meldIdx] = newMeld;
   player.hand = player.hand.filter(c => c.id !== cardId);
   // Track lay-off credit: card.id → layerOffPlayerIdx
@@ -366,7 +377,12 @@ function discardCard(game, cardId) {
   game.discard.push(card);
   pushLog(game, `${player.name} discarded the ${cardLabel(card)}.`);
   if (player.hand.length === 0) {
-    return endRound(game, game.currentPlayer, 'wentOut');
+    // Floating rule: rummy mini-turns can't end the round.
+    // The player floats with an empty hand; they'll draw one card on their own
+    // next turn and discard it to go out normally.
+    if (!(settings.floating && game.lastDrawn?.source === 'rummy')) {
+      return endRound(game, game.currentPlayer, 'wentOut');
+    }
   }
   game.currentPlayer = (game.currentPlayer + 1) % game.players.length;
   game.phase    = 'draw';

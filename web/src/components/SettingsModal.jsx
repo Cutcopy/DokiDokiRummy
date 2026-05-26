@@ -143,6 +143,16 @@ function SettingsModal({ settings, onChange, onClose }) {
             />
           </SettingRow>
 
+          <SettingRow
+            label="Floating"
+            hint="Must discard to go out — you can't win by melding or laying off your last card, and rummy calls can never end the round"
+          >
+            <BinaryToggle
+              value={settings.floating}
+              onChange={v => set('floating', v)}
+            />
+          </SettingRow>
+
           <SettingRow label="Two decks (3+ players)" hint="Use two shuffled decks when playing with 3 or 4 players">
             <BinaryToggle
               value={settings.twoDecks3plus}
