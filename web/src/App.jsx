@@ -15,6 +15,11 @@ function App() {
   const [showScoreboard, setShowScoreboard] = useState(false);
   const [undoSnapshot, setUndoSnapshot]   = useState(null);  // saved before drawFromDiscard
   const [sortMode, setSortMode]           = useState('suit'); // 'suit' | 'rank' | 'value'
+  const [rummyCard, setRummyCard]         = useState(null);  // card human can call Rummy on
+  const [drawnCardDisplay, setDrawnCardDisplay] = useState(null); // card reveal overlay
+  const drawnCardTimerRef = useRef(null);
+  const rummyResolveRef     = useRef(null); // resolves the Rummy-decision promise in runAITurn
+  const rummyPlayResolveRef = useRef(null); // resolves when human finishes their Rummy play
   const mascotsRef = useRef([null]);      // index 0 = human (no mascot)
 
   // Spread the current mutated game object into React state to trigger a re-render.
@@ -68,17 +73,32 @@ function App() {
   };
 
   // ---------- Human actions ----------
+
+  // Show the drawn card prominently in the centre of the table for ~1 s.
+  const flashDrawnCard = (card) => {
+    if (!card) return;
+    if (drawnCardTimerRef.current) clearTimeout(drawnCardTimerRef.current);
+    setDrawnCardDisplay(card);
+    drawnCardTimerRef.current = setTimeout(() => {
+      setDrawnCardDisplay(null);
+      drawnCardTimerRef.current = null;
+    }, 1050);
+  };
+
   const onStockClick = () => {
     if (!game || game.currentPlayer !== 0 || game.phase !== 'draw') return;
+    setRummyCard(null);    // dismiss any Rummy alert
     setUndoSnapshot(null); // stock draws can't be undone
     const result = window.RummyGame.drawFromStock(game);
     if (result.error) return showToast(result.error, 'error');
     if (result.roundOver) { finishRound(); return; }
+    flashDrawnCard(game.lastDrawn?.targetCard);
     refresh();
   };
 
   const onDiscardClick = (idx) => {
     if (!game || game.currentPlayer !== 0 || game.phase !== 'draw') return;
+    setRummyCard(null); // dismiss any Rummy alert
     // Snapshot state before the draw so the player can undo if they get stuck
     const snapshot = {
       hand:      game.players[0].hand.map(c => ({ ...c })),
@@ -88,11 +108,15 @@ function App() {
     const result = window.RummyGame.drawFromDiscard(game, idx);
     if (result.error) return showToast(result.error, 'error');
     setUndoSnapshot(snapshot);
+    flashDrawnCard(game.lastDrawn?.targetCard);
     refresh();
   };
 
   const onUndoDraw = () => {
     if (!undoSnapshot || !game) return;
+    // Clear any in-flight draw reveal
+    if (drawnCardTimerRef.current) { clearTimeout(drawnCardTimerRef.current); drawnCardTimerRef.current = null; }
+    setDrawnCardDisplay(null);
     // Restore player's hand and discard pile to pre-draw state
     game.players[0].hand = undoSnapshot.hand;
     game.discard         = undoSnapshot.discard;
@@ -100,6 +124,27 @@ function App() {
     game.lastDrawn       = undoSnapshot.lastDrawn;
     setUndoSnapshot(null);
     setSelected([]);
+    refresh();
+  };
+
+  const onCallRummy = () => {
+    if (!rummyCard || !game) return;
+    const top = game.discard[game.discard.length - 1];
+    if (!top || top.id !== rummyCard.id) { setRummyCard(null); return; }
+    // Take just the top card into the human's hand
+    game.discard.pop();
+    game.players[0].hand.push(top);
+    game.currentPlayer = 0;
+    game.phase    = 'play';
+    // source='rummy' bypasses mustMeldDrawnCard but still requires playing it
+    game.lastDrawn = { source: 'rummy', cards: [top], targetCard: top };
+    setRummyCard(null);
+    setSelected([]);
+    // Signal runAITurn (if it's waiting) that Rummy was called
+    if (rummyResolveRef.current) {
+      rummyResolveRef.current('called');
+      rummyResolveRef.current = null;
+    }
     refresh();
   };
 
@@ -137,11 +182,58 @@ function App() {
     setSelected([]);
     setUndoSnapshot(null); // turn is over — can't go back
     if (result.roundOver) { finishRound(); return; }
+    // If this was a Rummy mini-turn, signal runAITurn to restore turn order
+    if (rummyPlayResolveRef.current) {
+      const resolve = rummyPlayResolveRef.current;
+      rummyPlayResolveRef.current = null;
+      refresh(); // show the discard immediately
+      resolve('done'); // runAITurn resumes and corrects currentPlayer
+      return;
+    }
     refresh();
   };
 
+  // Cancel a Rummy call — put the card back and resume normal flow
+  const onCancelRummy = () => {
+    if (!game) return;
+    const card = game.lastDrawn?.targetCard;
+    if (!card || game.lastDrawn?.source !== 'rummy') return;
+    // Safety guard: only cancel if the rummy card is still in the player's hand.
+    // If the card was already played (e.g. laid off on a meld), bail out rather
+    // than pushing a card to the discard that's simultaneously living in a meld —
+    // that would give the card two data-card-id DOM nodes and cause a ghost FLIP
+    // animation to fire every single render.
+    if (!game.players[0].hand.some(c => c.id === card.id)) return;
+    // Return the card to the top of the discard pile
+    game.players[0].hand = game.players[0].hand.filter(c => c.id !== card.id);
+    game.discard.push(card);
+    // Clear stale FLIP position so the returned card doesn't animate from the wrong spot
+    delete prevPositions.current[card.id];
+    game.lastDrawn = null;
+    setSelected([]);
+    if (rummyPlayResolveRef.current) {
+      // 3+ player: runAITurn is waiting — resolving it will restore the correct
+      // next player and call refresh() for us.
+      const resolve = rummyPlayResolveRef.current;
+      rummyPlayResolveRef.current = null;
+      resolve('cancelled');
+    } else {
+      // 2-player: it was the human's own draw turn anyway; reset to draw phase.
+      game.currentPlayer = 0;
+      game.phase = 'draw';
+      refresh();
+    }
+  };
+
   // ---------- Round management ----------
+  const clearRummy = () => {
+    setRummyCard(null);
+    if (rummyResolveRef.current)     { rummyResolveRef.current('roundOver');     rummyResolveRef.current     = null; }
+    if (rummyPlayResolveRef.current) { rummyPlayResolveRef.current('roundOver'); rummyPlayResolveRef.current = null; }
+  };
+
   const finishRound = () => {
+    clearRummy();
     setSelected([]);
     setSpeeches({});
     setUndoSnapshot(null);
@@ -151,6 +243,7 @@ function App() {
 
   const nextRound = () => {
     window.RummyGame.startNewRound(game);
+    clearRummy();
     setSelected([]);
     setSpeeches({});
     setUndoSnapshot(null);
@@ -160,6 +253,7 @@ function App() {
   };
 
   const newGame = () => {
+    clearRummy();
     setGame(null);
     setSelected([]);
     setSpeeches({});
@@ -219,7 +313,8 @@ function App() {
       }
 
       // — Lay offs —
-      const acesHigh = game.settings?.acesHigh ?? false;
+      const acesHigh  = game.settings?.acesHigh  ?? false;
+      const deuceWild = game.settings?.deuceWild ?? false;
       let layoffsDone = 0;
       while (layoffsDone < 20) {
         const player  = game.players[aiIdx];
@@ -281,6 +376,43 @@ function App() {
         refresh();
       }
 
+      // — Rummy check —
+      // After any discard, see if the human can call Rummy on the top card.
+      if (game.phase === 'draw' && game.discard.length > 0
+          && canHumanCallRummy(game, acesHigh, deuceWild)) {
+        const top = game.discard[game.discard.length - 1];
+        const nextIsHuman = game.currentPlayer === 0;
+        setRummyCard(top);
+
+        if (!nextIsHuman) {
+          // 3+ player: pause the AI sequence and let the human decide
+          const rummyNextPlayer = game.currentPlayer;
+          const decision = await new Promise(resolve => {
+            rummyResolveRef.current = resolve;
+            setTimeout(() => resolve('timeout'), 3500);
+          });
+          setRummyCard(null);
+          rummyResolveRef.current = null;
+
+          if (decision === 'called') {
+            // Wait for the human to finish their Rummy mini-turn
+            await new Promise(resolve => {
+              rummyPlayResolveRef.current = resolve;
+              setTimeout(() => resolve('timeout'), 60000);
+            });
+            rummyPlayResolveRef.current = null;
+            // Restore turn order (discardCard advanced to player 1, not rummyNextPlayer)
+            if (game.phase !== 'roundOver' && game.phase !== 'gameOver') {
+              game.currentPlayer = rummyNextPlayer;
+              game.phase         = 'draw';
+              game.lastDrawn     = null;
+              refresh();
+            }
+          }
+        }
+        // In 2-player (nextIsHuman), rummyCard stays set until the human draws normally
+      }
+
       console.log('[AI] turn end → phase=', game.phase, 'cp=', game.currentPlayer);
     } catch (err) {
       console.error('[AI] Unexpected error in runAITurn:', err);
@@ -337,13 +469,19 @@ function App() {
   const selectedCards      = selected.map(id => human?.hand.find(c => c.id === id)).filter(Boolean);
   const selectionIsValidMeld = game && window.RummyGame.isValidMeld(selectedCards, acesHigh, deuceWild);
 
+  // After calling Rummy the player must play that card (always required, not a setting)
+  const rummyMustPlay = !!(
+    game?.lastDrawn?.source === 'rummy'
+    && human?.hand?.some(c => c.id === game?.lastDrawn?.targetCard?.id)
+  );
   // mustMeldFirst: player drew from discard and the bottom card is still in their hand
-  const mustMeldFirst = !!(
+  const mustMeldFirst = rummyMustPlay || !!(
     game?.settings?.mustMeldDrawnCard
     && game?.lastDrawn?.source === 'discard'
     && human?.hand?.some(c => c.id === game?.lastDrawn?.targetCard?.id)
   );
   const mustMeldCard = mustMeldFirst ? game.lastDrawn.targetCard : null;
+  const isRummyPlay  = game?.lastDrawn?.source === 'rummy';
 
   const canDiscard = game && isHumanTurn && isPlayPhase && selected.length === 1
     && !mustMeldFirst;
@@ -369,6 +507,10 @@ function App() {
       const rect = el.getBoundingClientRect();
       newPositions[id] = { left: rect.left, top: rect.top };
       if (rafWorks.current === false) return;
+      // Skip FLIP for hand cards — they use CSS transitions for the fan/selection
+      // effect, so reading their position mid-transition gives a stale value that
+      // produces jitter (especially during the AI turn's rapid re-renders).
+      if (el.closest('[data-hand-of]')) return;
       const prev = prevPositions.current[id];
       if (prev) {
         const dx = prev.left - rect.left;
@@ -450,6 +592,19 @@ function App() {
             onOpponentMeldClick={(pi, mi) => onLayoffMeld(pi, mi)}
           />
 
+          {/* RUMMY ALERT */}
+          {rummyCard && (
+            <div className="dd-rummy-overlay">
+              <button className="dd-rummy-btn" onClick={onCallRummy}>
+                <span className="dd-rummy-badge">RUMMY!</span>
+                <span className="dd-rummy-info">
+                  Grab the <strong>{rummyCard.rank}{rummyCard.suit}</strong> and play it now
+                </span>
+                <span className="dd-rummy-bar" />
+              </button>
+            </div>
+          )}
+
           {/* PLAYER AREA */}
           <div className="dd-player-area">
             <div className="dd-hand-wrap">
@@ -495,15 +650,24 @@ function App() {
               canDiscard={canDiscard}
               mustMeldFirst={mustMeldFirst}
               mustMeldCard={mustMeldCard}
+              isRummyPlay={isRummyPlay}
               undoSnapshot={undoSnapshot}
               onMeldSelected={onMeldSelected}
               onDiscardSelected={onDiscardSelected}
               onClearSelection={() => setSelected([])}
               onUndoDraw={onUndoDraw}
+              onCancelRummy={onCancelRummy}
             />
           </div>
         </div>
       </ScalingStage>
+
+      {/* DRAWN CARD REVEAL — outside ScalingStage so CSS transform doesn't clip it */}
+      {drawnCardDisplay && (
+        <div className="dd-draw-reveal" key={drawnCardDisplay.id}>
+          <Card card={drawnCardDisplay} />
+        </div>
+      )}
 
       {/* Toast */}
       {toast && (
@@ -558,8 +722,8 @@ function ScalingStage({ children }) {
 function ActionPanel({
   game, human, isHumanTurn, isPlayPhase, selected,
   selectionIsValidMeld, layoffTargets, canDiscard,
-  mustMeldFirst, mustMeldCard,
-  undoSnapshot, onUndoDraw,
+  mustMeldFirst, mustMeldCard, isRummyPlay,
+  undoSnapshot, onUndoDraw, onCancelRummy,
   onMeldSelected, onDiscardSelected, onClearSelection,
 }) {
   if (!isHumanTurn) {
@@ -591,8 +755,20 @@ function ActionPanel({
         {/* mustMeldFirst hint */}
         {mustMeldFirst && mustMeldCard && (
           <div className="dd-actions-hint" style={{ color: 'var(--dd-cherry)', fontWeight: 600 }}>
-            Must meld or lay off the {mustMeldCard.rank}{mustMeldCard.suit} before discarding ♥
+            {isRummyPlay
+              ? `RUMMY! Build a meld or lay off using ${mustMeldCard.rank}${mustMeldCard.suit} — wilds count!`
+              : `Must meld or lay off the ${mustMeldCard.rank}${mustMeldCard.suit} before discarding ♥`}
           </div>
+        )}
+        {isRummyPlay && mustMeldFirst && (
+          <button
+            className="dd-btn dd-btn--ghost dd-btn--small"
+            onClick={onCancelRummy}
+            title="Return the card to the discard pile and take your normal turn"
+            style={{ alignSelf: 'flex-start', marginTop: -4 }}
+          >
+            ↩ Put back
+          </button>
         )}
 
         {selCount === 0 && !mustMeldFirst && (
@@ -668,6 +844,68 @@ function HeartGlyph() {
       <ellipse cx="36" cy="38" rx="5" ry="8" fill="#FFF" opacity="0.6" />
     </svg>
   );
+}
+
+// ---------- Rummy call helper ----------
+// Returns true if the top discard card can ACTUALLY be immediately melded or
+// laid off by the human — verified using the same isValidMeld / tryLayOff
+// functions that playMeld / playLayOff use, so there are no false positives.
+function canHumanCallRummy(game, acesHigh, deuceWild) {
+  const top = game.discard[game.discard.length - 1];
+  if (!top || !game.players[0]) return false;
+  const human    = game.players[0];
+  const settings = game.settings ?? {};
+  const anyMeld  = settings.layoffAnyMeld     ?? true;
+  const minFirst = settings.minFirstMeld       ?? 0;
+  const qohBonus = settings.queenOfHeartsBonus ?? false;
+
+  // 1. Check lay-offs on existing melds (no minimum-value restriction on lay-offs)
+  for (let pi = 0; pi < game.players.length; pi++) {
+    if (!anyMeld && pi !== 0) continue;
+    for (const meld of game.players[pi].melds) {
+      if (window.RummyGame.tryLayOff(top, meld, acesHigh, deuceWild)) return true;
+    }
+  }
+
+  // 2. Check if top card can form a brand-new valid meld with cards in hand.
+  //    Enumerate every combination of 2-6 hand cards paired with the top card,
+  //    then call isValidMeld directly (same check as playMeld uses).
+  const hand    = human.hand;
+  const maxSize = Math.min(7, hand.length + 1);
+  for (let size = 3; size <= maxSize; size++) {
+    const need = size - 1; // cards from hand (top fills one slot)
+    if (need > hand.length) break;
+    const found = rummyCombinationSearch(hand, need, (subset) => {
+      const cards = [top, ...subset];
+      if (!window.RummyGame.isValidMeld(cards, acesHigh, deuceWild)) return false;
+      // Respect minFirstMeld: first meld of the round must meet the threshold
+      if (!human.hasMelded && minFirst > 0) {
+        const val = cards.reduce((s, c) => s + window.RummyGame.cardValue(c, qohBonus), 0);
+        return val >= minFirst;
+      }
+      return true;
+    });
+    if (found) return true;
+  }
+  return false;
+}
+
+// Iterate all C(arr.length, k) subsets; call fn(subset) until it returns true.
+// Returns true as soon as fn does, otherwise false.
+function rummyCombinationSearch(arr, k, fn) {
+  if (k === 0) return fn([]);
+  if (k > arr.length) return false;
+  const idx = Array.from({ length: k }, (_, i) => i);
+  while (true) {
+    if (fn(idx.map(i => arr[i]))) return true;
+    // advance to next combination
+    let pos = k - 1;
+    while (pos >= 0 && idx[pos] === arr.length - k + pos) pos--;
+    if (pos < 0) break;
+    idx[pos]++;
+    for (let i = pos + 1; i < k; i++) idx[i] = idx[i - 1] + 1;
+  }
+  return false;
 }
 
 // ---------- Hand sort helper ----------

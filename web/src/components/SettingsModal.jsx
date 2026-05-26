@@ -18,6 +18,20 @@ function SettingsModal({ settings, onChange, onClose }) {
         </div>
         <h2 style={{ marginBottom: 4 }}>Settings</h2>
 
+        {/* ── Difficulty ──────────────────────────── */}
+        <div className="dd-settings-section">
+          <h3>Difficulty</h3>
+
+          <SettingRow label="AI difficulty" hint="Hard: opponents play defensively, dig deeper into the discard pile, and avoid gifting you useful cards">
+            <BinaryToggle
+              value={settings.difficulty === 'hard'}
+              onChange={v => set('difficulty', v ? 'hard' : 'normal')}
+              falseLabel="Normal"
+              trueLabel="Hard 💀"
+            />
+          </SettingRow>
+        </div>
+
         {/* ── Scoring ─────────────────────────────── */}
         <div className="dd-settings-section">
           <h3>Scoring</h3>
@@ -71,15 +85,15 @@ function SettingsModal({ settings, onChange, onClose }) {
         <div className="dd-settings-section">
           <h3>Rules</h3>
 
-          <SettingRow label="Starting hand" hint="Cards dealt to each player at round start (Auto: 13 for 2-player, 7 for 3–4)">
+          <SettingRow label="Starting hand" hint="Cards dealt to each player at round start">
             <div className="dd-toggle-group">
-              {[null, 5, 7, 10, 13].map(v => (
+              {[5, 7, 10, 13].map(v => (
                 <button
-                  key={v ?? 'auto'}
+                  key={v}
                   className={`dd-toggle-btn ${settings.handSize === v ? 'is-active' : ''}`}
                   onClick={() => set('handSize', v)}
                 >
-                  {v === null ? 'Auto' : v}
+                  {v}
                 </button>
               ))}
             </div>

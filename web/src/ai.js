@@ -130,40 +130,73 @@ function findLayOffs(hand, players, acesHigh = false, deuceWild = false) {
 
 // ---------- AI decisions ----------
 
-// Decide whether to take from discard. Returns { source, index? }.
+// Decide whether to take from discard. Scans the whole pile top-down.
+// Returns { source, index? } where index is the position in game.discard to
+// draw from (all cards from that index to the top are taken).
 function decideDraw(aiIdx, game) {
-  const acesHigh  = game.settings?.acesHigh       ?? false;
-  const deuceWild = game.settings?.deuceWild       ?? false;
+  const acesHigh  = game.settings?.acesHigh        ?? false;
+  const deuceWild = game.settings?.deuceWild        ?? false;
   const mustMeld  = game.settings?.mustMeldDrawnCard ?? false;
+  const hardMode  = game.settings?.difficulty === 'hard';
   const player    = game.players[aiIdx];
-  const top       = game.discard[game.discard.length - 1];
-  if (!top) return { source: 'stock' };
 
-  const hypothetical = [...player.hand, top];
-  const meldsBefore  = findBestMelds(player.hand,  acesHigh, deuceWild).reduce((s, m) => s + m.length, 0);
-  const meldsAfter   = findBestMelds(hypothetical, acesHigh, deuceWild).reduce((s, m) => s + m.length, 0);
+  if (game.discard.length === 0) return { source: 'stock' };
 
-  if (meldsAfter > meldsBefore) {
-    // If mustMeldDrawnCard is on, the top card must actually be IN one of the new melds
-    if (mustMeld) {
-      const topInMeld = findBestMelds(hypothetical, acesHigh, deuceWild).some(m => m.some(c => c.id === top.id));
-      if (!topInMeld) return { source: 'stock' };
-    }
-    return { source: 'discard', index: game.discard.length - 1 };
-  }
+  // Pre-compute meld value with current hand as the baseline
+  const baseValue = findBestMelds(player.hand, acesHigh, deuceWild)
+    .reduce((s, m) => s + m.reduce((ms, c) => ms + cardValue(c), 0), 0);
 
-  // Only try layoff-based draw if mustMeldDrawnCard is NOT required
-  if (!mustMeld) {
-    for (let pi = 0; pi < game.players.length; pi++) {
-      for (const meld of game.players[pi].melds) {
-        if (tryLayOff(top, meld, acesHigh, deuceWild)) {
-          return { source: 'discard', index: game.discard.length - 1 };
+  let bestSource = 'stock';
+  let bestIdx    = -1;
+  let bestScore  = 0; // score must exceed 0 to prefer discard over stock
+
+  // Hard mode: willing to dig deeper and carry more overhead cards
+  const maxDepth       = hardMode ? 8 : 5;
+  const overheadFactor = hardMode ? 3 : 6; // lower cost per overhead card in hard mode
+
+  // Evaluate each position in the pile, starting from the top (cheapest) down.
+  // index length-1 = top card (0 overhead), index 0 = bottom (all cards taken).
+  for (let i = game.discard.length - 1; i >= 0; i--) {
+    const overhead   = game.discard.length - 1 - i; // extra cards we must also pick up
+    if (overhead > maxDepth) break;
+
+    const targetCard = game.discard[i];
+    const takenCards = game.discard.slice(i);        // target + every card above it
+    const hypoHand   = [...player.hand, ...takenCards];
+    const hypoMelds  = findBestMelds(hypoHand, acesHigh, deuceWild);
+    const hypoValue  = hypoMelds.reduce((s, m) => s + m.reduce((ms, c) => ms + cardValue(c), 0), 0);
+
+    // The target card must be directly useful — in a new meld or a lay-off
+    const targetInMeld = hypoMelds.some(m => m.some(c => c.id === targetCard.id));
+    if (!targetInMeld) {
+      // Check lay-off on any existing meld
+      let canLayOff = false;
+      for (let pi = 0; pi < game.players.length && !canLayOff; pi++) {
+        for (const meld of game.players[pi].melds) {
+          if (tryLayOff(targetCard, meld, acesHigh, deuceWild)) canLayOff = true;
         }
       }
+      if (!canLayOff) continue; // target card not directly useful — skip this depth
+    }
+
+    // mustMeldDrawnCard: the target card must land in a meld this turn
+    if (mustMeld && !targetInMeld) continue;
+
+    // Score = meld value gained minus a penalty for each overhead card we must also carry.
+    const meldGain        = hypoValue - baseValue;
+    const overheadPenalty = overhead * overheadFactor;
+    const score           = meldGain - overheadPenalty;
+
+    if (score > bestScore) {
+      bestScore  = score;
+      bestSource = 'discard';
+      bestIdx    = i;
     }
   }
 
-  return { source: 'stock' };
+  return bestSource === 'discard'
+    ? { source: 'discard', index: bestIdx }
+    : { source: 'stock' };
 }
 
 // Find melds to play this turn. Returns array of meld card-id arrays.
@@ -192,7 +225,9 @@ function decideMelds(aiIdx, game) {
 // Decide what to discard. Returns card id or null.
 function decideDiscard(aiIdx, game) {
   const mustMeld  = game.settings?.mustMeldDrawnCard ?? false;
-  const deuceWild = game.settings?.deuceWild          ?? false;
+  const deuceWild = game.settings?.deuceWild         ?? false;
+  const acesHigh  = game.settings?.acesHigh          ?? false;
+  const hardMode  = game.settings?.difficulty === 'hard';
   const player    = game.players[aiIdx];
   let candidates  = player.hand;
 
@@ -206,19 +241,69 @@ function decideDiscard(aiIdx, game) {
 
   if (candidates.length === 0) candidates = player.hand;
 
+  // Hard mode: pre-score each opponent's melds as a lookup set for fast checking
+  // We use tryLayOff directly per card, so no pre-build needed.
+
   let best = null, bestScore = -Infinity;
   for (const c of candidates) {
     if (isWild(c, deuceWild)) continue; // never discard a wild
-    let score = cardValue(c); // prefer discarding high-value dead cards
+
+    let score = cardValue(c); // base: prefer discarding high-value dead cards
+
     const others = player.hand.filter(x => x.id !== c.id);
+
     // Pair / triplet — don't break it up
     const sameRank = others.filter(x => x.rank === c.rank).length;
     if (sameRank >= 1) score -= 8 * sameRank;
+
     // Partial run — don't break it up
-    const nearby = others.filter(x => x.suit === c.suit && Math.abs(rankIndex(x.rank) - rankIndex(c.rank)) <= 2 && x.rank !== c.rank);
+    const nearby = others.filter(
+      x => x.suit === c.suit
+        && Math.abs(rankIndex(x.rank) - rankIndex(c.rank)) <= 2
+        && x.rank !== c.rank
+    );
     score -= 4 * nearby.length;
+
+    if (hardMode) {
+      // ── Defensive discard ─────────────────────────────────────────
+      // Strongly penalise discarding a card that extends any opponent's
+      // existing meld — we don't want to gift them a free lay-off.
+      for (let pi = 0; pi < game.players.length; pi++) {
+        if (pi === aiIdx) continue;
+        for (const meld of game.players[pi].melds) {
+          if (tryLayOff(c, meld, acesHigh, deuceWild)) {
+            score -= 20; // stiff penalty: avoid feeding opponent melds
+          }
+        }
+      }
+
+      // ── Tighter near-meld protection ──────────────────────────────
+      // In hard mode, be more protective of 2-card partial runs (closer
+      // neighbours get an extra penalty so the AI holds onto building
+      // blocks longer).
+      const adjacent = others.filter(
+        x => x.suit === c.suit
+          && Math.abs(rankIndex(x.rank) - rankIndex(c.rank)) === 1
+      );
+      score -= 5 * adjacent.length; // adjacent cards are worth keeping
+
+      // ── Discard rank-based fed-opponent heuristic ─────────────────
+      // Cards whose rank matches an opponent's melded rank (set) are
+      // somewhat dangerous to discard — opponent may build more sets.
+      for (let pi = 0; pi < game.players.length; pi++) {
+        if (pi === aiIdx) continue;
+        for (const meld of game.players[pi].melds) {
+          if (meld.some(mc => mc.rank === c.rank && !isWild(mc, deuceWild))) {
+            score -= 6; // mild penalty: same rank already on their table
+            break;
+          }
+        }
+      }
+    }
+
     if (score > bestScore) { bestScore = score; best = c; }
   }
+
   // Fallback: first non-forbidden candidate
   if (!best) best = candidates[0];
   return best?.id;

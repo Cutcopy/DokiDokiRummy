@@ -25,16 +25,17 @@ const nextId = () => `c${_nextId++}`;
 
 const DEFAULT_SETTINGS = {
   winScore:            500,
-  acesHigh:            false,
-  jokersWild:          true,
-  deuceWild:           false,  // 2s also act as wild cards in melds
+  acesHigh:            true,   // aces rank both low (A-2-3) and high (Q-K-A)
+  jokersWild:          false,  // jokers not included in deck
+  deuceWild:           true,   // 2s act as wild cards in melds
   mustMeldDrawnCard:   true,
   layoffAnyMeld:       true,
-  queenOfHeartsBonus:  false,
+  queenOfHeartsBonus:  true,   // Q♥ worth 40 pts
   firstMeldOutBonus:   true,
   minFirstMeld:        0,
   twoDecks3plus:       true,
-  handSize:            null,  // null = auto (13 for 2-player, 7 for 3+)
+  handSize:            7,      // 7 cards dealt to each player
+  difficulty:          'normal', // 'normal' | 'hard'
 };
 
 // ---------- Card helpers ----------
@@ -265,7 +266,7 @@ function drawFromStock(game) {
   const card = game.stock.pop();
   game.players[game.currentPlayer].hand.push(card);
   game.phase    = 'play';
-  game.lastDrawn = { source: 'stock', cards: [card] };
+  game.lastDrawn = { source: 'stock', cards: [card], targetCard: card };
   pushLog(game, `${game.players[game.currentPlayer].name} drew from the deck.`);
   return { taken: [card] };
 }
