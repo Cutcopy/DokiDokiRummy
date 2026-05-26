@@ -145,7 +145,7 @@ function SettingsModal({ settings, onChange, onClose }) {
 
           <SettingRow
             label="Floating"
-            hint="Must discard to go out — you can't win by melding or laying off your last card, and rummy calls can never end the round"
+            hint="Must discard to go out — you can meld or lay off your last card(s), but that floats you back to draw phase; only a discard ends the round"
           >
             <BinaryToggle
               value={settings.floating}

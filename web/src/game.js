@@ -36,8 +36,8 @@ const DEFAULT_SETTINGS = {
   twoDecks3plus:       true,
   handSize:            7,      // 7 cards dealt to each player
   difficulty:          'normal', // 'normal' | 'hard'
-  floating:            true,   // must discard to go out; can't win via meld/layoff alone
-                               // also prevents winning on a rummy call
+  floating:            true,   // must discard to go out; melding/laying off your last card(s)
+                               // is allowed but floats you back to draw phase
 };
 
 // ---------- Card helpers ----------
@@ -303,11 +303,6 @@ function playMeld(game, cardIds) {
     }
   }
 
-  // Floating rule: must always keep at least one card to discard; can't go out by melding
-  if (settings.floating && player.hand.length === cardIds.length) {
-    return { error: 'Must keep a card to discard — you can\'t go out by melding alone (floating rule)' };
-  }
-
   const wasFirstMeld = player.melds.length === 0;
   let arranged = cards;
   if (isValidRun(cards, settings.acesHigh, settings.deuceWild)) arranged = arrangeRun(cards, settings.acesHigh, settings.deuceWild);
@@ -316,6 +311,15 @@ function playMeld(game, cardIds) {
   player.hand = player.hand.filter(c => !cardIds.includes(c.id));
   pushLog(game, `${player.name} laid down a ${meldType(arranged, settings.acesHigh, settings.deuceWild)}.`);
   if (player.hand.length === 0) {
+    if (settings.floating) {
+      // Floating rule: emptying hand via meld is fine — player floats back to draw phase
+      // and must discard on their next turn to go out.
+      game.currentPlayer = (game.currentPlayer + 1) % game.players.length;
+      game.phase    = 'draw';
+      game.lastDrawn = null;
+      if (game.stock.length === 0) return endRound(game, null, 'stockEmpty');
+      return { ok: true };
+    }
     game.wentOutOnFirstMeld = wasFirstMeld;
     return endRound(game, game.currentPlayer, 'wentOut');
   }
@@ -339,10 +343,6 @@ function playLayOff(game, cardId, targetPlayerIdx, meldIdx) {
   if (!meld) return { error: 'Meld not found' };
   const newMeld = tryLayOff(card, meld, settings.acesHigh, settings.deuceWild);
   if (!newMeld) return { error: 'Card does not extend meld' };
-  // Floating rule: must always keep at least one card to discard; can't go out by laying off
-  if (settings.floating && player.hand.length === 1) {
-    return { error: 'Must keep a card to discard — you can\'t go out by laying off (floating rule)' };
-  }
   target.melds[meldIdx] = newMeld;
   player.hand = player.hand.filter(c => c.id !== cardId);
   // Track lay-off credit: card.id → layerOffPlayerIdx
@@ -352,6 +352,15 @@ function playLayOff(game, cardId, targetPlayerIdx, meldIdx) {
   };
   pushLog(game, `${player.name} laid off the ${cardLabel(card)} on ${target.name}'s meld.`);
   if (player.hand.length === 0) {
+    if (settings.floating) {
+      // Floating rule: emptying hand via lay-off is fine — player floats back to draw phase
+      // and must discard on their next turn to go out.
+      game.currentPlayer = (game.currentPlayer + 1) % game.players.length;
+      game.phase    = 'draw';
+      game.lastDrawn = null;
+      if (game.stock.length === 0) return endRound(game, null, 'stockEmpty');
+      return { ok: true };
+    }
     return endRound(game, game.currentPlayer, 'wentOut');
   }
   return { ok: true };
@@ -377,12 +386,8 @@ function discardCard(game, cardId) {
   game.discard.push(card);
   pushLog(game, `${player.name} discarded the ${cardLabel(card)}.`);
   if (player.hand.length === 0) {
-    // Floating rule: rummy mini-turns can't end the round.
-    // The player floats with an empty hand; they'll draw one card on their own
-    // next turn and discard it to go out normally.
-    if (!(settings.floating && game.lastDrawn?.source === 'rummy')) {
-      return endRound(game, game.currentPlayer, 'wentOut');
-    }
+    // Discarding your last card always goes out — this is the only way to win with floating on.
+    return endRound(game, game.currentPlayer, 'wentOut');
   }
   game.currentPlayer = (game.currentPlayer + 1) % game.players.length;
   game.phase    = 'draw';
