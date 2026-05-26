@@ -9,13 +9,13 @@ function Scoreboard({ game, onNextRound, onNewGame }) {
   const winner = game.winner;
   return (
     <div className="dd-modal-veil">
-      <div className="dd-modal" style={{ maxWidth: 640 }}>
+      <div className="dd-modal" style={{ maxWidth: 900 }}>
         {isGameOver ? (
           <React.Fragment>
             <div className="dd-win-trophy">
               {winner?.isHuman
                 ? <img src="assets/trophy.svg" alt="Trophy" className="dd-trophy-img" />
-                : '★'}
+                : <img src="assets/Star.svg" alt="Star" className="dd-trophy-img" />}
             </div>
             <h1>{winner?.isHuman ? 'You Win!' : `${winner?.name} Wins!`}</h1>
             <p className="lede">
@@ -33,6 +33,7 @@ function Scoreboard({ game, onNextRound, onNewGame }) {
           </React.Fragment>
         )}
 
+        <div className="dd-score-table-wrap">
         <table className="dd-score-table">
           <thead>
             <tr>
@@ -65,6 +66,7 @@ function Scoreboard({ game, onNextRound, onNewGame }) {
             })}
           </tbody>
         </table>
+        </div>
 
         <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 24 }}>
           {isGameOver ? (

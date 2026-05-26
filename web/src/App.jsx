@@ -46,12 +46,12 @@ function App() {
       const greetings = {};
       picked.forEach((m, i) => { greetings[i + 1] = window.pickLine(m, 'greet'); });
       setSpeeches(greetings);
-      setTimeout(() => setSpeeches({}), 2200);
+      setTimeout(() => setSpeeches({}), 3200);
     }, 600);
   }, [settings]);
 
   // ---------- Speech helper ----------
-  const sayFor = (playerIdx, key, duration = 1800) => {
+  const sayFor = (playerIdx, key, duration = 3200) => {
     const mascot = mascotsRef.current[playerIdx];
     if (!mascot) return;
     const line = window.pickLine(mascot, key);
@@ -342,7 +342,7 @@ function App() {
         const r = window.RummyGame.discardCard(game, discardId);
         console.log('[AI] discardCard result', r, '→ phase=', game.phase, 'cp=', game.currentPlayer);
         if (!r.error) {
-          sayFor(aiIdx, 'discard', 1200);
+          sayFor(aiIdx, 'discard', 2400);
           refresh();
           if (r.roundOver) { finishRound(); return; }
           discarded = true;
