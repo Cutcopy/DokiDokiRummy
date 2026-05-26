@@ -1039,7 +1039,6 @@ body {
   font-size: 120px;
   text-align: center;
   line-height: 1;
-  filter: drop-shadow(4px 4px 0 var(--dd-ink));
   margin-bottom: 16px;
 }
 
